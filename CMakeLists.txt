@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.5.0)
 
 PROJECT(peoplecount)
 
+EXECUTE_PROCESS( COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
+
+message( STATUS "Architecture: ${ARCHITECTURE}" )
+
+
 find_package(SQLite3 REQUIRED)
 
 message("SQLite3 version: ${SQLite3_VERSION}")
@@ -25,35 +30,25 @@ message("eclipse-paho-mqtt-c version: ${eclipse-paho-mqtt-c_VERSION}")
 
 file(GLOB peoplecount_INCLUDE_DIR
     "include"
-    "src"
-    "src/sws"
-    "util/include"
-    "communication/include"
-    "serial/include"
-    "camera160/include"
+)
+
+file(GLOB peoplecount_LIB_DIR
+    "lib/${ARCHITECTURE}"
 )
 
 file(GLOB peoplecount_SRC
     "src/*.cpp"
-    "src/sws/*.cpp"
-    "util/src/*.cpp"
-    "communication/src/*.cpp"
-    "serial/src/*.cpp"
-    "camera160/src/*.cpp"
 )
 
 include_directories( ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} ${peoplecount_INCLUDE_DIR} )
 
-link_directories( ${OpenCV_LIBRARY_DIRS} ${PCL_LIBRARY_DIRS} {CMAKE_THREAD_LIBS_INIT})
+link_directories( ${OpenCV_LIBRARY_DIRS} ${PCL_LIBRARY_DIRS} {CMAKE_THREAD_LIBS_INIT} ${peoplecount_LIB_DIR})
 
 add_definitions(${PCL_DEFINITIONS})
 
 ADD_EXECUTABLE( peoplecount ${peoplecount_SRC})
 
-TARGET_LINK_LIBRARIES(peoplecount ${OpenCV_LIBS} ${PCL_LIBRARIES} paho-mqtt3as SQLite::SQLite3)
+TARGET_LINK_LIBRARIES(peoplecount ${OpenCV_LIBS} ${PCL_LIBRARIES} paho-mqtt3as SQLite::SQLite3 vsemi_pct)
 
-message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
-
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 
 
