@@ -431,7 +431,7 @@ int retrieve_from_db(time_t ts, time_t te)
 		//}
 		//printf("\n");
 
-		int device = 9830664;//std::stoi( argv[0] ); // for debug 
+		int device = sensor_uid;//9830664;//std::stoi( argv[0] ); // for debug 
 		int enter = std::stoi( argv[1] );
 		int exit = std::stoi( argv[2] );
 		time_t dt = (time_t) std::stoi( argv[3] );
