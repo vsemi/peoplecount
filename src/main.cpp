@@ -6,7 +6,7 @@
 #include <ctime>
 #include <iomanip>
 #include <thread>
-
+#include <mutex>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -56,8 +56,6 @@
 #include "lora.hpp"
 #include "led.h"
 
-//#include "sws/server_http.hpp"
-//#include "sws/utility.hpp"
 #include "MJPGStreamer.h"
 
 u_int32_t sensor_uid;
@@ -82,13 +80,19 @@ unsigned int amplitude1 = 100;
 
 int hdr = 0;
 
-
 bool is_stopped = false;
 cv::Mat depth_bgr(60, 160, CV_8UC3, cv::Scalar(0, 0, 0));
 cv::Mat_<cv::Point3f> point3f_mat_(60, 160);
 
-std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> queque_clouds;
+std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> queque_raw;
+std::vector<Cloud> queque_filtered;
+std::vector<std::vector<Cloud>> queque_clustered;
 std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> queque_record;
+
+std::mutex mutex_queque_raw;
+std::mutex mutex_queque_filtered;
+std::mutex mutex_queque_clustered;
+std::mutex mutex_queque_record;
 
 std::string title;
 
@@ -102,15 +106,12 @@ bool mqtt_connected = false;
 
 int ping_enabled = 0;
 
-//const char* serverURI = "tcp://ec2-3-149-232-177.us-east-2.compute.amazonaws.com:1883";//"tcp://ec2-3-15-32-121.us-east-2.compute.amazonaws.com:1883";//"tcp://broker.hivemq.com:1883";//"tcp://test.mosquitto.org:1883"; //"tcp://broker.hivemq.com:1883";
-const char* serverURI = "ssl://a1y8b7gmw22f9i-ats.iot.us-east-2.amazonaws.com:8883";//"ssl://[2600:1f00:6000::387:65ea]:8883";//"ssl://ec2-3-149-232-177.us-east-2.compute.amazonaws.com:8883";//"ssl://ec2-3-149-232-177.us-east-2.compute.amazonaws.com:8883";
+const char* serverURI = "ssl://a1y8b7gmw22f9i-ats.iot.us-east-2.amazonaws.com:8883";
 
-const char* cert_path = "/home/vsemi/aws";
-const char* ca_file = "/home/vsemi/aws/root-CA.crt";//"/home/vsemi/aws/AmazonRootCA1.pem";//"/home/vsemi/aws/root-CA.pem";//"/home/vsemi/aws/certs/ca.pem"; 
-// -cert peoplecount.cert.pem --key peoplecount.private.key --client_id basicPubSub
-const char* client_cert = "/home/vsemi/aws/mqtt5.certificate.pem";
-const char* client_key = "/home/vsemi/aws/mqtt5.private.key";
-std::string clientId = "mqtt5-sub";
+const char* ca_file = "/home/vsemi/dev/peoplecount/aws/root-CA.crt";
+const char* client_cert = "/home/vsemi/dev/peoplecount/aws/mqtt5.certificate.pem";
+const char* client_key = "/home/vsemi/dev/peoplecount/aws/mqtt5.private.key";
+std::string clientId = "";
 const char* clientPass = "";
 
 char const *LED_RED = "83";
@@ -185,6 +186,7 @@ bool has_ip_address(std::string ip)
     return false;
 }
 
+int empty_frames_interval = 0;
 void process(Camera* camera)
 {
 	ErrorNumber_e status;
@@ -192,44 +194,31 @@ void process(Camera* camera)
 	ToFImage tofImage(camera->getWidth(), camera->getHeight());
 	camera->setIntegrationTimeGrayscale(0);
 
+	std::chrono::steady_clock::time_point st_time0;
+	std::chrono::steady_clock::time_point en_time0;
+
 	std::chrono::steady_clock::time_point st_time;
 	std::chrono::steady_clock::time_point en_time;
 
 	double interval, frame_rate;
+	st_time0 = std::chrono::steady_clock::now();
 	st_time = std::chrono::steady_clock::now();
 	int data_frame_id = 0;
-	/////////////////////////////////////
-	int end_frame = 1568; // replay only
-	/////////////////////////////////////
-
-	// for demo only
-	//if (strcmp(action, "view") == 0)
-	//{
-	//	cv::namedWindow("VSemi ToF 635", cv::WND_PROP_FULLSCREEN);
-	//	cv::setWindowProperty("VSemi ToF 635", cv::WND_PROP_FULLSCREEN, cv::WINDOW_FULLSCREEN);
-	//}
 	
-	/*
-	bool rgb_ok;
-	cv::VideoCapture cap;
-	rgb_ok = cap.open("/dev/v4l/by-id/usb-046d_Logitech_Webcam_C930e_986A01BE-video-index0");
-	if (rgb_ok)
-	{
-		cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-		cap.set(cv::CAP_PROP_FRAME_WIDTH, 960);
-		cap.set(cv::CAP_PROP_FRAME_HEIGHT, 540);
-		std::cerr << "The video camera is opened." << std::endl;
-	} else
-	{
-		std::cerr << "The video camera is not able to be opened." << std::endl;
-	}
-	*/
-
 	while (! exit_requested)
 	{
 		try
 		{
-		
+
+			//en_time = std::chrono::steady_clock::now();
+			//interval = ((double) std::chrono::duration_cast<std::chrono::microseconds>(en_time - st_time).count()) / 1000.0;
+			//if (interval < 100)
+			//{
+			//	usleep(1000);
+			//	continue;
+			//}
+			//st_time = std::chrono::steady_clock::now();
+
 			//std::cout << "To request next frame ... " << std::endl;
 			status = camera->getDistance(tofImage);
 			if (status != ERROR_NUMMBER_NO_ERROR)
@@ -322,29 +311,12 @@ void process(Camera* camera)
 				);
 
 				streamer->write(depth_bgr_display);
-
-				//cv::imshow("VSemi ToF 635", depth_bgr_display);
-				//if (cv::waitKey(1) == 27)a
-				//{
-				//	break;
-				//}
 			} else
-			{
+			{				
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-				if (strcmp(action, "replay") == 0)
+				if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0) 
 				{
-					if (data_frame_id > end_frame) continue;
-					
-					std::string _file_path = "/home/vsemi/data/people-counting-data/2020-08-15/" + std::to_string(data_frame_id) + ".dgp";
-					cv::Mat depth_mat, grayscale;
-					read_frame(_file_path, &depth_mat, &grayscale);
-
-					to_point_cloud(depth_mat, grayscale, point_cloud_ptr, depth_bgr, point3f_mat_, 0, data_background);
-				} else if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0) 
-				{
-					//depth_bgr = cv::Mat(tofImage.height, tofImage.width, CV_8UC3, tofImage.data_2d_bgr);
-					
 					pcl::PointXYZRGB* data_ptr = reinterpret_cast<pcl::PointXYZRGB*>(tofImage.data_3d_xyz_rgb);
 					std::vector<pcl::PointXYZRGB> pts(data_ptr, data_ptr + tofImage.n_points);
 					point_cloud_ptr->points.clear();
@@ -355,25 +327,32 @@ void process(Camera* camera)
 					point_cloud_ptr->is_dense = false;		
 				}
 
-				queque_clouds.push_back(point_cloud_ptr);
+				std::unique_lock<std::mutex> lock_queque_raw(mutex_queque_raw);
+				queque_raw.push_back(point_cloud_ptr);
+				//std::cout << "   =====================> queque_raw:  " << queque_raw.size() << std::endl;
+				lock_queque_raw.unlock();
+				
+				if (strcmp(action, "record") == 0)
+				{
+					std::unique_lock<std::mutex> lock_queque_record(mutex_queque_record);
+					if (point_cloud_ptr->points.size() >= 15) 
+					{
+						queque_record.push_back(point_cloud_ptr);
+						empty_frames_interval = 0;
+					} else 
+					{
+						if (empty_frames_interval < 5)
+						{
+							queque_record.push_back(point_cloud_ptr);
+							empty_frames_interval ++;
+						}				
+					}
+					lock_queque_record.unlock();
+				}
 			}
 
 			data_frame_id ++;
 
-			/*
-			// no rgb for this demo
-			if (rgb_ok)
-			{
-				cv::Mat rgb_frame;
-				cap >> rgb_frame;
-				if ((! rgb_frame.empty()) && rgb_frame.rows > 0 && rgb_frame.cols > 0)
-				{
-					cv::Mat cropRGB(rgb_frame, cv::Rect(0, 90, 960, 360));
-					cv::Mat overlayRGB(depth_bgr_display, cv::Rect(0, 720, 960, 360));
-					cropRGB.copyTo(overlayRGB);
-				}
-			}
-			*/
 		}
 		catch( ... )
 		{
@@ -383,10 +362,10 @@ void process(Camera* camera)
 
 	exit_requested = true;
 
-	en_time = std::chrono::steady_clock::now();
-	interval = ((double) std::chrono::duration_cast<std::chrono::microseconds>(en_time - st_time).count()) / 1000000.0;
+	en_time0 = std::chrono::steady_clock::now();
+	interval = ((double) std::chrono::duration_cast<std::chrono::microseconds>(en_time0 - st_time0).count()) / 1000000.0;
 	frame_rate = ((double) data_frame_id) / interval;
-	std::cout << "Distance frames: " << data_frame_id << " time spent: " << interval << " frame rate: " << frame_rate << std::endl;
+	std::cout << "Frames: " << data_frame_id << " time spent: " << interval << " frame rate: " << frame_rate << std::endl;
 }
 
 int save_to_db(int i, int o, time_t t)
@@ -416,27 +395,18 @@ int save_to_db(int i, int o, time_t t)
 
 int retrieve_from_db(time_t ts, time_t te)
 {
-	// for debug 
 	char *zErrMsg = 0;
-	//std::string sql = "SELECT DEVICEID, ENTER, EXIT, DATETIME FROM PEOPLECOUNT WHERE DEVICEID = " + std::to_string(sensor_uid) + " AND DATETIME >= " + std::to_string(ts) + " AND DATETIME <= " + std::to_string(te) + "; ";
 	std::string sql = "SELECT DEVICEID, ENTER, EXIT, DATETIME FROM PEOPLECOUNT WHERE DATETIME >= " + std::to_string(ts) + " AND DATETIME <= " + std::to_string(te) + "; ";
-	std::cout << "sql: " << sql << std::endl;
+	//std::cout << "sql: " << sql << std::endl;
 
 	int rc = sqlite3_exec(db, sql.c_str(), [](void *data, int argc, char **argv, char **azColName){
-		//int i;
-		//fprintf(stderr, "%s: ", (const char*)data);
-
-		//for(i = 0; i<argc; i++){
-		//	printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-		//}
-		//printf("\n");
-
-		int device = sensor_uid;//9830664;//std::stoi( argv[0] ); // for debug 
+		
+		int device = sensor_uid;
 		int enter = std::stoi( argv[1] );
 		int exit = std::stoi( argv[2] );
 		time_t dt = (time_t) std::stoi( argv[3] );
 
-		std::cout << "   device: " << device << " enter: " << enter << " exit: " << exit << " dt: " << std::to_string(dt) << std::endl;
+		//std::cout << "   device: " << device << " enter: " << enter << " exit: " << exit << " dt: " << std::to_string(dt) << std::endl;
 
 		std::string payload = "{\"device_id\":\"" + std::to_string(device) + "\", \"msg_type\":\"uplink\", \"dt\":\"" + std::to_string(dt) + "\"";
 		payload += ", \"uplink_data\":[{\"in\": \"" + std::to_string(enter) + "\", \"out\": \"" + std::to_string(exit) + "\"}]";
@@ -481,7 +451,7 @@ int send_message_payload(std::string payload)
 		{
 			std::cout << "Failed to send MQTT message, rc: " << rc << std::endl;
 		}
-		std::cout << "MQTT message sent: \n" << payload << std::endl;
+		//std::cout << "MQTT message sent: \n" << payload << std::endl;
 	} 
 	if (strcmp(comm_protocal, "lora") == 0)
 	{
@@ -500,13 +470,8 @@ int send_message_payload(std::string payload)
 	return rc;
 }
 
-//std::chrono::steady_clock::time_point _time_last_sent = std::chrono::steady_clock::now();
 int send_message()
 {
-	//std::chrono::steady_clock::time_point cur_time = std::chrono::steady_clock::now();
-	//double interval = ((double) std::chrono::duration_cast<std::chrono::microseconds>(cur_time - _time_last_sent).count()) / 1000000.0;
-	//if (interval < 2.5) return 0;
-
 	if (queue_payload.size() > 0)
 	{
 		if (strcmp(comm_protocal, "mqtt") == 0 && mqtt_connected)
@@ -523,8 +488,6 @@ int send_message()
 				{
 					queue_payload.erase(queue_payload.begin() + i);
 					i --;
-
-					//_time_last_sent = std::chrono::steady_clock::now();
 				}
 			}
 		} else if (strcmp(comm_protocal, "lora") == 0 && lora_available)
@@ -539,19 +502,17 @@ int send_message()
 			if (rc == 0)
 			{
 				queue_payload.erase(queue_payload.begin());
-
-				//_time_last_sent = std::chrono::steady_clock::now();
 			}
 		}
 	} else 
 	{
-		// send heart beat
-		
+		// send heart beat		
 		if (ping_enabled > 0) 
 		{
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
+			payload += ", \"version\": \"2.1.1\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -564,9 +525,64 @@ int send_message()
 	return 0;
 }
 
+void pre_filter_cloud()
+{
+	while (! exit_requested)
+	{
+		try {
+			
+			if (queque_raw.size() > 0)
+			{
+				std::unique_lock<std::mutex> lock_queque_raw(mutex_queque_raw);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr = queque_raw[0];
+				queque_raw.erase (queque_raw.begin());
+				lock_queque_raw.unlock();
+
+				Cloud cloud;
+				filterAndDownSample(point_cloud_ptr, cloud, data_background);
+
+				std::unique_lock<std::mutex> lock_queque_filtered(mutex_queque_filtered);
+				queque_filtered.push_back(cloud);
+				//std::cout << "   =====================> queque_filtered:  " << queque_filtered.size() << std::endl;
+				lock_queque_filtered.unlock();
+			}
+		} catch (...)
+		{
+			//
+		}
+	}
+}
+
+void pre_cluster_cloud()
+{
+	while (! exit_requested)
+	{
+		try {
+			
+			if (queque_filtered.size() > 0)
+			{
+				std::unique_lock<std::mutex> lock_queque_filtered(mutex_queque_filtered);
+				Cloud cloud = queque_filtered[0];
+				queque_filtered.erase (queque_filtered.begin());
+				lock_queque_filtered.unlock();
+
+				std::vector<Cloud> cloud_clusters;
+				clustering_cloud(cloud, cloud_clusters, 0.03, 90, 9600);
+
+				std::unique_lock<std::mutex> lock_queque_clustered(mutex_queque_clustered);
+				queque_clustered.push_back(cloud_clusters);
+				//std::cout << "   =====================> queque_clustered:  " << queque_clustered.size() << std::endl;
+				lock_queque_clustered.unlock();
+			}
+		} catch (...)
+		{
+			//
+		}
+	}
+}
+
 int ping_count = 0;
 bool led_green_on = false;
-int empty_frames_interval = 0;
 void detect_and_track()
 {
 	int in = 0, out = 0;
@@ -574,16 +590,22 @@ void detect_and_track()
 	while (! exit_requested)
 	{
 		try {
-			
-			if (queque_clouds.size() > 0)
+			//std::cout << "   detect -> queque_clustered.size(): " << queque_clustered.size() << std::endl;
+			if (queque_clustered.size() > 0)
 			{
-				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw = queque_clouds[0];
-				queque_clouds.erase (queque_clouds.begin());
+				std::unique_lock<std::mutex> lock_queque_clustered(mutex_queque_clustered);
+				std::vector<Cloud> clusters = queque_clustered[0];
+				queque_clustered.erase (queque_clustered.begin());
+				lock_queque_clustered.unlock();
 
-				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_objects(new pcl::PointCloud<pcl::PointXYZRGB>);
-				filterAndDownSample(cloud_raw, cloud_objects, data_background);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_clustered(new pcl::PointCloud<pcl::PointXYZRGB>);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_detected(new pcl::PointCloud<pcl::PointXYZRGB>);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_centers(new pcl::PointCloud<pcl::PointXYZRGB>);
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_debug(new pcl::PointCloud<pcl::PointXYZRGB>);
 				
-				int tracked = detect(cloud_objects, out, in);
+				int tracked = detect(clusters, out, in, cloud_clustered, cloud_detected, cloud_centers, cloud_debug);
+				//std::cout << "   tracked: " << tracked << " in: " << in << " out: " << out << std::endl;
 				
 				bool msg_sent = false;
 				if (in != 0 || out != 0)
@@ -591,7 +613,7 @@ void detect_and_track()
 					time_t t = std::time(nullptr);
 					if ((t - t_prev) >= 1)
 					{
-						std::cout << "   detect -> in: " << in << " out: " << out << std::endl;
+						//std::cout << "   detect -> in: " << in << " out: " << out << std::endl;
 												
 						std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"uplink\", \"dt\":\"" + std::to_string(t) + "\"";
 						
@@ -609,21 +631,6 @@ void detect_and_track()
 						out = 0;
 						t_prev = t;
 						msg_sent = true;
-					}
-				}
-				if (strcmp(action, "record") == 0)
-				{
-					if (cloud_objects->points.size() >= 15) 
-					{
-						queque_record.push_back(cloud_raw);
-						empty_frames_interval = 0;
-					} else 
-					{
-						if (empty_frames_interval < 5)
-						{
-							queque_record.push_back(cloud_raw);
-							empty_frames_interval ++;
-						}				
 					}
 				}
 
@@ -658,8 +665,7 @@ void detect_and_track()
 			}
 		} catch(...)
 		{
-			// detect_and_track
-			std::cerr << "Unknown error in detect_and_track ... " << std::endl;
+			std::cerr << "Unknown error in detect and track ... " << std::endl;
 		}
 	}
 }
@@ -675,7 +681,6 @@ bool refresh_folder_path(std::string &f_path)
 
 	if (!file_exists(f_path))
 	{
-		//create
 		int status = mkdir(f_path.c_str(),0777);
 		if (status == 0)
 		{
@@ -693,8 +698,6 @@ bool refresh_folder_path(std::string &f_path)
 
 void record_data()
 {
-	//std::cout << "Starting recording listener ... " << std::endl;
-
 	std::string f_path = "";
 	bool file_system_ok = refresh_folder_path(f_path);
 	if (! file_system_ok)
@@ -715,8 +718,6 @@ void record_data()
 					exit_requested = true;
 				}
 
-				//if (queque_record.size() > 1) std::cout << "====== more than 1 frame in queque: " << queque_record.size() << std::endl;
-				
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw = queque_record[0];
 				queque_record.erase (queque_record.begin());
 				
@@ -773,15 +774,10 @@ void onConnect(void* context, MQTTAsync_successData5* response)
 
 int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_message* message)
 {
-	//printf("Message arrived\n");
-	//printf("	 topic: %s\n", topicName);
-	// {"device_id":"9830589", "msg_type":"downlink", "dt":"1716480703","command":"ping"}
-
 	char* msg = (char*)message->payload;
 	std::string msg_str(msg);
 
 	//std::cout << "msg_str: "<< msg_str << std::endl;
-
 	boost::property_tree::ptree pt;
 	std::istringstream is(msg_str);
 	boost::property_tree::read_json(is, pt);
@@ -832,6 +828,8 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				{
 					sync();
 					reboot(RB_AUTOBOOT);
+					//reboot(LINUX_REBOOT_CMD_RESTART);
+					execl("/bin/shutdown", "shutdown", "-r", "now", (char *)0);
 				}
 			}
 		}
@@ -872,7 +870,7 @@ int subscribe_mqtt_topic()
 
 static void mqtt_trace_callback(enum MQTTASYNC_TRACE_LEVELS level, char *message)
 {
-    if (level >= MQTTASYNC_TRACE_ERROR) //MQTTASYNC_TRACE_ERROR) //MQTTASYNC_TRACE_MEDIUM) //MQTTASYNC_TRACE_PROTOCOL) // //MQTTASYNC_TRACE_MAXIMUM MQTTASYNC_TRACE_MINIMUM MQTTASYNC_TRACE_MEDIUM
+    if (level >= MQTTASYNC_TRACE_ERROR)
         fprintf(stderr, "%s\n", message);
 }
 
@@ -901,7 +899,6 @@ int connectToMQTT()
 	conn_opts.MQTTVersion = MQTTVERSION_5;
 	conn_opts.automaticReconnect = 1;
 	conn_opts.cleanstart = 1;
-	//conn_opts.reconnectNow = 1;
 	
 	conn_opts.onSuccess5 = onConnect;
 	conn_opts.onFailure5 = onConnectFailure;
@@ -962,7 +959,6 @@ int connectToMQTT()
 
 void loRa_command(std::string command)
 {
-	// AT+ADDRESS=2\r\n
 	std::string payload = command + "\r\n";
 
 	int len = payload.size();
@@ -1116,7 +1112,7 @@ void start()
 	std::cout << "HDR:              " << hdr_mode << std::endl;
 	std::cout << "\n" << std::endl;
 
-	if (strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0)
+	if (strcmp(action, "record") == 0 || strcmp(action, "train-record") == 0)
 	{
 		std::thread th_record_data(&record_data);
 		th_record_data.detach();
@@ -1124,6 +1120,12 @@ void start()
 
 	std::thread th_detect_and_track(&detect_and_track);
 	th_detect_and_track.detach();
+
+	std::thread th_pre_cluster_cloud(&pre_cluster_cloud);
+	th_pre_cluster_cloud.detach();
+
+	std::thread th_pre_filter_cloud(&pre_filter_cloud);
+	th_pre_filter_cloud.detach();
 
 	process(camera);
 
@@ -1164,7 +1166,6 @@ int init_db()
 		"EXIT           INT     NOT NULL," \
 		"DATETIME       INT PRIMARY KEY);";
 
-		/* Execute SQL statement */
 		rc = sqlite3_exec(db, sql, [](void *NotUsed, int argc, char **argv, char **azColName){
 			int i;
 			for(i = 0; i<argc; i++) {
@@ -1331,10 +1332,6 @@ int main(int argc, char** argv) {
 		homedir = getpwuid(getuid())->pw_dir;
 	}
 
-	//std::cout << "User home: " << homedir << std::endl;
-	//caTrustStore = std::string(homedir) + "/TrustStore/ca.pem";
-	//std::cout << "TrustStore: " << caTrustStore << std::endl;
-
 	if (argc >= 8)
 	{
 		action = argv[1];
@@ -1419,11 +1416,6 @@ int main(int argc, char** argv) {
 		hdr = std::stoi( hdr_str );
 
 		std::cout << "Mode:            " << action << std::endl;
-
-	} else if (argc == 2 && strcmp(argv[1], "replay") == 0)
-	{
-		action = argv[1];
-		std::cout << "Starting mode: " << action << std::endl;
 	} else {
 		std::cout << "Usage: peoplecount [train | detect | record || train-detect | train-record | view] <integrationTime0> <integrationTime1> <amplitude> <HDR> <Data Storage> [lora | mqtt] [MQTT Broker] [MQTT Client ID]" << std::endl;
 		std::cout << "Option for lora | mqtt:" << std::endl;
@@ -1441,7 +1433,7 @@ int main(int argc, char** argv) {
 	}
 	if (_dev)
 	{
-		sd_card = (char*) "/home/vsemi/data/people-counting-data";
+		sd_card = (char*) "/home/vsemi/data/peoplecount/test";
 	}
 	bool result_save_locally = false;
 	if (strcmp(action, "train") == 0 || strcmp(action, "detect") == 0 || strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0)
@@ -1458,10 +1450,7 @@ int main(int argc, char** argv) {
 	}
 
 	data_background = new float[9600];
-	if (strcmp(action, "replay") == 0)
-	{
-		read("/home/vsemi/data/people-counting-data/2020-08-15/background.mat", data_background);
-	} else if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0)
+	if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0)
 	{
 		std::string background_file_path = std::string(sd_card) + "/model.bin";
 		if (file_exists(background_file_path))
@@ -1514,10 +1503,6 @@ int main(int argc, char** argv) {
 		{
 			sensor_uid = camera->getID();
 
-			//std::string device_id_str = "DEVICE_" + std::to_string(sensor_uid);
-			//char p[device_id_str.size() + 1];
-			//strcpy(p, device_id_str.c_str());
-			//clientId = p;
 			clientId = "VSEMI_" + std::to_string(sensor_uid);
 		}
 	}        
