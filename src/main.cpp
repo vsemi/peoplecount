@@ -811,7 +811,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				int te = std::stoi( dt_str );
 
 				retrieve_from_db(ts, te);
-			} else if (command == "upgrade")
+			} else if (command == "update-firmware")
 			{
 				std::cout << "   ---> upgrade request for id: " << id << std::endl;
 				//std::ofstream f;
@@ -828,7 +828,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				if (file_exists("/home/cat/certs"))
 				{
 					std::cout << "   ---> excecute upgrade command ... " << std::endl;
-					execl("/home/cat", "upgrade.sh", (char*)0);
+					execl("/home/cat", "update_firmware.sh", (char*)0);
 					exit_requested = true;
 					std::cout << "   ---> exit_requested: " << exit_requested << std::endl;
 				}
