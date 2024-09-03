@@ -813,17 +813,17 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				retrieve_from_db(ts, te);
 			} else if (command == "upgrade")
 			{
-				std::cout << "downlink upgrade message for id: " << id << std::endl;
-				std::ofstream f;
-				if (file_exists("/home/cat/certs"))
-				{
-					f.open ("/home/cat/upgrade");
-				} else
-				{
-					f.open ("/home/vsemi/peoplecount/upgrade"); // homedir
-				}
-				f << "upgrade";
-				f.close();
+				std::cout << "   ---> upgrade request for id: " << id << std::endl;
+				//std::ofstream f;
+				//if (file_exists("/home/cat/certs"))
+				//{
+				//	f.open ("/home/cat/upgrade");
+				//} else
+				//{
+				//	f.open ("/home/vsemi/peoplecount/upgrade"); // homedir
+				//}
+				//f << "upgrade";
+				//f.close();
 
 				if (file_exists("/home/cat/certs"))
 				{
