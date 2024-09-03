@@ -162,7 +162,7 @@ bool has_ip_address(std::string ip)
         std::string interface_name = std::string(ptr_entry->ifa_name);
         sa_family_t address_family = ptr_entry->ifa_addr->sa_family;
         if( address_family == AF_INET ){
-            
+
             if( ptr_entry->ifa_addr != nullptr ){
                 char buffer[INET_ADDRSTRLEN] = {0, };
                 inet_ntop(
@@ -204,7 +204,7 @@ void process(Camera* camera)
 	st_time0 = std::chrono::steady_clock::now();
 	st_time = std::chrono::steady_clock::now();
 	int data_frame_id = 0;
-	
+
 	while (! exit_requested)
 	{
 		try
@@ -227,30 +227,30 @@ void process(Camera* camera)
 				usleep(500000);
 				continue;
 			}
-					
+
 			if (strcmp(action, "train") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0)
 			{
 				train(tofImage.data_3d_xyz_rgb, data_background);
-				if (data_frame_id >= 10 && data_frame_id < 100 && data_frame_id % 10 == 0) 
+				if (data_frame_id >= 10 && data_frame_id < 100 && data_frame_id % 10 == 0)
 				{
 					std::cout << "Training in progress: " << data_frame_id << "%, please wait ..." << std::endl;
-				
+
 					if (led_available)
 					{
 						gpio_high(LED_RED);
 					}
-				} else 
+				} else
 				{
 					if (led_available)
 					{
 						gpio_low(LED_RED);
 					}
 				}
-				if (data_frame_id > 100) 
+				if (data_frame_id > 100)
 				{
 					std::string fn = std::string(sd_card) + "/model.bin";
 					write(fn, data_background);
-					
+
 					std::cout << "\nTraining completed, starting detect ..." << std::endl;
 
 					if (strcmp(action, "train") == 0)
@@ -287,35 +287,35 @@ void process(Camera* camera)
 					cv::resize(depth_bgr, depth_bgr_enlarge, cv::Size(1920, 720), cv::INTER_LINEAR);
 				}
 
-				cv::Mat _blank(360, 1920, CV_8UC3, cv::Scalar(0, 0, 0));		
+				cv::Mat _blank(360, 1920, CV_8UC3, cv::Scalar(0, 0, 0));
 				cv::Mat depth_bgr_display;
 				cv::vconcat(depth_bgr_enlarge, _blank, depth_bgr_display);
 
 				cv::putText(
-					depth_bgr_display, "Device ID: " + std::to_string(sensor_uid), cv::Point(20, 780), 
+					depth_bgr_display, "Device ID: " + std::to_string(sensor_uid), cv::Point(20, 780),
 					cv::FONT_HERSHEY_DUPLEX, 1.4, cv::Scalar(255,255,255), 1, cv::LINE_AA
 				);
 
 				cv::putText(
-					depth_bgr_display, "Make sure part of the gate stub or door frame can be seen by ToF camera.", cv::Point(20, 840), 
+					depth_bgr_display, "Make sure part of the gate stub or door frame can be seen by ToF camera.", cv::Point(20, 840),
 					cv::FONT_HERSHEY_DUPLEX, 1.2, cv::Scalar(255,255,255), 1, cv::LINE_AA
 				);
 
 				cv::putText(
-					depth_bgr_display, "For more info, visit http://www.vsemi.io", cv::Point(1020, 960), 
+					depth_bgr_display, "For more info, visit http://www.vsemi.io", cv::Point(1020, 960),
 					cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(255,255,255), 1, cv::LINE_AA
 				);
 				cv::putText(
-					depth_bgr_display, "2023 Visionary Semiconductor Inc. All rights reserved", cv::Point(1020, 1000), 
+					depth_bgr_display, "2023 Visionary Semiconductor Inc. All rights reserved", cv::Point(1020, 1000),
 					cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(255,255,255), 1, cv::LINE_AA
 				);
 
 				streamer->write(depth_bgr_display);
 			} else
-			{				
+			{
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-				if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0) 
+				if (strcmp(action, "detect") == 0 || strcmp(action, "record") == 0 || strcmp(action, "train-detect") == 0 || strcmp(action, "train-record") == 0)
 				{
 					pcl::PointXYZRGB* data_ptr = reinterpret_cast<pcl::PointXYZRGB*>(tofImage.data_3d_xyz_rgb);
 					std::vector<pcl::PointXYZRGB> pts(data_ptr, data_ptr + tofImage.n_points);
@@ -324,28 +324,28 @@ void process(Camera* camera)
 					point_cloud_ptr->resize(tofImage.n_points);
 					point_cloud_ptr->width = tofImage.n_points;
 					point_cloud_ptr->height = 1;
-					point_cloud_ptr->is_dense = false;		
+					point_cloud_ptr->is_dense = false;
 				}
 
 				std::unique_lock<std::mutex> lock_queque_raw(mutex_queque_raw);
 				queque_raw.push_back(point_cloud_ptr);
 				//std::cout << "   =====================> queque_raw:  " << queque_raw.size() << std::endl;
 				lock_queque_raw.unlock();
-				
+
 				if (strcmp(action, "record") == 0)
 				{
 					std::unique_lock<std::mutex> lock_queque_record(mutex_queque_record);
-					if (point_cloud_ptr->points.size() >= 15) 
+					if (point_cloud_ptr->points.size() >= 15)
 					{
 						queque_record.push_back(point_cloud_ptr);
 						empty_frames_interval = 0;
-					} else 
+					} else
 					{
 						if (empty_frames_interval < 5)
 						{
 							queque_record.push_back(point_cloud_ptr);
 							empty_frames_interval ++;
-						}				
+						}
 					}
 					lock_queque_record.unlock();
 				}
@@ -400,7 +400,7 @@ int retrieve_from_db(time_t ts, time_t te)
 	//std::cout << "sql: " << sql << std::endl;
 
 	int rc = sqlite3_exec(db, sql.c_str(), [](void *data, int argc, char **argv, char **azColName){
-		
+
 		int device = sensor_uid;
 		int enter = std::stoi( argv[1] );
 		int exit = std::stoi( argv[2] );
@@ -452,7 +452,7 @@ int send_message_payload(std::string payload)
 			std::cout << "Failed to send MQTT message, rc: " << rc << std::endl;
 		}
 		//std::cout << "MQTT message sent: \n" << payload << std::endl;
-	} 
+	}
 	if (strcmp(comm_protocal, "lora") == 0)
 	{
 		lora.sendData(data, len);
@@ -479,7 +479,7 @@ int send_message()
 			for (int i = 0; i < queue_payload.size(); i ++)
 			{
 				std::string payload = queue_payload[i];
-			
+
 				char p[payload.size() + 1];
 				strcpy(p, payload.c_str());
 
@@ -494,7 +494,7 @@ int send_message()
 		{
 			// for low band lora, send one msg at a time
 			std::string payload = queue_payload[0];
-		
+
 			char p[payload.size() + 1];
 			strcpy(p, payload.c_str());
 
@@ -504,15 +504,15 @@ int send_message()
 				queue_payload.erase(queue_payload.begin());
 			}
 		}
-	} else 
+	} else
 	{
-		// send heart beat		
-		if (ping_enabled > 0) 
+		// send heart beat
+		if (ping_enabled > 0)
 		{
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.1\"";
+			payload += ", \"version\": \"2.1.2\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -530,7 +530,7 @@ void pre_filter_cloud()
 	while (! exit_requested)
 	{
 		try {
-			
+
 			if (queque_raw.size() > 0)
 			{
 				std::unique_lock<std::mutex> lock_queque_raw(mutex_queque_raw);
@@ -558,7 +558,7 @@ void pre_cluster_cloud()
 	while (! exit_requested)
 	{
 		try {
-			
+
 			if (queque_filtered.size() > 0)
 			{
 				std::unique_lock<std::mutex> lock_queque_filtered(mutex_queque_filtered);
@@ -603,10 +603,10 @@ void detect_and_track()
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_detected(new pcl::PointCloud<pcl::PointXYZRGB>);
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_centers(new pcl::PointCloud<pcl::PointXYZRGB>);
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_debug(new pcl::PointCloud<pcl::PointXYZRGB>);
-				
+
 				int tracked = detect(clusters, out, in, cloud_clustered, cloud_detected, cloud_centers, cloud_debug);
 				//std::cout << "   tracked: " << tracked << " in: " << in << " out: " << out << std::endl;
-				
+
 				bool msg_sent = false;
 				if (in != 0 || out != 0)
 				{
@@ -614,9 +614,9 @@ void detect_and_track()
 					if ((t - t_prev) >= 1)
 					{
 						//std::cout << "   detect -> in: " << in << " out: " << out << std::endl;
-												
+
 						std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"uplink\", \"dt\":\"" + std::to_string(t) + "\"";
-						
+
 						payload += ", \"uplink_data\":[{\"in\": \"" + std::to_string(in) + "\", \"out\": \"" + std::to_string(out) + "\"}]";
 
 						payload += "}";
@@ -624,7 +624,7 @@ void detect_and_track()
 						queue_payload.push_back(payload);
 
 						int r = send_message();
-						
+
 						save_to_db(in, out, t);
 
 						in = 0;
@@ -638,25 +638,25 @@ void detect_and_track()
 				{
 					ping_count = 0;
 					//std::cout << "   Track ... " << std::endl;
-					
-					if (! led_green_on) 
+
+					if (! led_green_on)
 					{
 						if (led_available) gpio_high(LED_GREEN);
-						led_green_on = true;						
-					} else 
+						led_green_on = true;
+					} else
 					{
 						if (led_available) gpio_low(LED_GREEN);
 						led_green_on = false;
-					}	
+					}
 				} else if ((! msg_sent) && tracked == 0 && ping_count%50 == 0)
 				{
 					ping_count = 0;
 					//std::cout << "   Ping ... " << std::endl;
-					if (led_available) gpio_high(LED_GREEN);	
+					if (led_available) gpio_high(LED_GREEN);
 					led_green_on = true;
 
 					send_message();
-				} else 
+				} else
 				{
 					if (led_available) gpio_low(LED_GREEN);
 					led_green_on = false;
@@ -707,9 +707,9 @@ void record_data()
 
 	while (! exit_requested)
 	{
-		try 
+		try
 		{
-			
+
 			if (queque_record.size() > 0)
 			{
 				file_system_ok = refresh_folder_path(f_path);
@@ -720,7 +720,7 @@ void record_data()
 
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_raw = queque_record[0];
 				queque_record.erase (queque_record.begin());
-				
+
 				std::string fn = f_path + "/" + std::to_string(i_frame_id) + ".pcd";
 
 				//std::cerr << "Saving data into fn: " << fn << std::endl;
@@ -762,7 +762,7 @@ void onSubscribeFailure(void* context, MQTTAsync_failureData5* response)
 void onConnectFailure(void* context, MQTTAsync_failureData5* response)
 {
 	std::cout << "   MQTT connect failed, rc: " << response->code << std::endl;
-	std::cout << "   message: " << std::string(response->message) << std::endl;	
+	std::cout << "   message: " << std::string(response->message) << std::endl;
 }
 
 void onConnect(void* context, MQTTAsync_successData5* response)
@@ -813,11 +813,12 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				retrieve_from_db(ts, te);
 			} else if (command == "upgrade")
 			{
+				std::cout << "downlink upgrade message for id: " << id << std::endl;
 				std::ofstream f;
 				if (file_exists("/home/cat/certs"))
 				{
 					f.open ("/home/cat/upgrade");
-				} else 
+				} else
 				{
 					f.open ("/home/vsemi/peoplecount/upgrade"); // homedir
 				}
@@ -826,15 +827,15 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 
 				if (file_exists("/home/cat/certs"))
 				{
-					sync();
-					reboot(RB_AUTOBOOT);
-					//reboot(LINUX_REBOOT_CMD_RESTART);
-					execl("/bin/shutdown", "shutdown", "-r", "now", (char *)0);
+					std::cout << "   ---> excecute upgrade command ... " << std::endl;
+					execl("/home/cat", "upgrade.sh", (char*)0);
+					exit_requested = true;
+					std::cout << "   ---> exit_requested: " << exit_requested << std::endl;
 				}
 			}
 		}
 	}
-	
+
 	MQTTAsync_freeMessage(&message);
 	MQTTAsync_free(topicName);
 	return 1;
@@ -843,13 +844,13 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 void connlost(void *context, char *cause)
 {
 	mqtt_connected = false;
-	fprintf(stderr, "Lost connection to broker, reconnecting...\n");	
+	fprintf(stderr, "Lost connection to broker, reconnecting...\n");
 }
 
 int subscribe_mqtt_topic()
 {
 	int rc;
-	
+
 	MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
 
     opts.context = client;
@@ -860,7 +861,7 @@ int subscribe_mqtt_topic()
 	if ((rc = MQTTAsync_subscribe(client, mqtt_topic.c_str(), 1, &opts)) != MQTTASYNC_SUCCESS)
 	{
 		std::cout << "   Failed to start subscribe, rc: " << rc << std::endl;
-	} else 
+	} else
 	{
 		//std::cout << "Subscribed to topic: " << mqtt_topic << std::endl;
 	}
@@ -899,7 +900,7 @@ int connectToMQTT()
 	conn_opts.MQTTVersion = MQTTVERSION_5;
 	conn_opts.automaticReconnect = 1;
 	conn_opts.cleanstart = 1;
-	
+
 	conn_opts.onSuccess5 = onConnect;
 	conn_opts.onFailure5 = onConnectFailure;
 
@@ -998,93 +999,93 @@ void start()
 	ErrorNumber_e status;
 
 	status = camera->setOperationMode(MODE_BEAM_A);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set OperationMode failed." << std::endl;
 	}
 
 	status = camera->setModulationFrequency(MODULATION_FREQUENCY_20MHZ);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set ModulationFrequency failed." << std::endl;
 	}
 
 	status = camera->setModulationChannel(0, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set tModulationChannel failed." << std::endl;
 	}
 
 	camera->setAcquisitionMode(AUTO_REPEAT);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set AcquisitionMode failed." << std::endl;
 	}
 
 	status = camera->setOffset(0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set Offset failed." << std::endl;
 	}
 
 	status = camera->setIntegrationTime3d(0, integrationTime0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 0 failed." << std::endl;
 	}
 	status = camera->setIntegrationTime3d(1, integrationTime1);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 1 failed." << std::endl;
 	}
 	status = camera->setIntegrationTime3d(2, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 2 failed." << std::endl;
 	}
 	status = camera->setIntegrationTime3d(3, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 3 failed." << std::endl;
 	}
 	status = camera->setIntegrationTime3d(4, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 4 failed." << std::endl;
 	}
 	status = camera->setIntegrationTime3d(5, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set IntegrationTime3d 5 failed." << std::endl;
 	}
 
 	status = camera->setMinimalAmplitude(0, amplitude0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 0 failed." << std::endl;
 	}
 	status = camera->setMinimalAmplitude(1, amplitude1);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 1 failed." << std::endl;
 	}
 	status = camera->setMinimalAmplitude(2, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 2 failed." << std::endl;
 	}
 	status = camera->setMinimalAmplitude(3, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 3 failed." << std::endl;
 	}
 	status = camera->setMinimalAmplitude(4, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 4 failed." << std::endl;
 	}
 	status = camera->setMinimalAmplitude(5, 0);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set MinimalAmplitude 5 failed." << std::endl;
 	}
@@ -1099,9 +1100,9 @@ void start()
 	{
 		hdr_mode = HDR_SPATIAL;
 	}
-	
+
 	status = camera->setHdr(hdr_mode);
-	if (status != ERROR_NUMMBER_NO_ERROR) 
+	if (status != ERROR_NUMMBER_NO_ERROR)
 	{
 		std::cerr << "Set HDR failed." << std::endl;
 	}
@@ -1182,14 +1183,14 @@ int init_db()
 			fprintf(stdout, "Table created successfully\n");
 		}
 	}
-	
+
 	return 0;
 }
 
 int conn_lora()
 {
 	std::string loraCommand;
-	
+
 	loraCommand = "AT+NETWORKID=" + std::to_string(lora_NETWORKID);
 	loRa_command(loraCommand);
 	usleep(1000000);
@@ -1201,7 +1202,7 @@ int conn_lora()
 	loraCommand = "AT+BAND=" + std::to_string(lora_BAND);
 	loRa_command(loraCommand);
 	usleep(1000000);
-	
+
 	loraCommand = "AT+NETWORKID=?";
 	loRa_command(loraCommand);
 	usleep(1000000);
@@ -1224,8 +1225,8 @@ int conn_sub_mqtt()
 {
 	int mqtt_ok = -1;
 
-	//std::cout << "Connecting to MQTT broker: " << serverURI << ", clientId: " << clientId << std::endl;	
-	std::cout << "Connecting to MQTT: " << std::endl;	
+	//std::cout << "Connecting to MQTT broker: " << serverURI << ", clientId: " << clientId << std::endl;
+	std::cout << "Connecting to MQTT: " << std::endl;
 	while ((! exit_requested) && (mqtt_ok != 0))
 	{
 		usleep(1000000);
@@ -1235,7 +1236,7 @@ int conn_sub_mqtt()
 			gpio_high(LED_RED);
 		}
 
-		if (mqtt_ok == 0) 
+		if (mqtt_ok == 0)
 		{
 			std::cout << "      conn succeeded, wait for callback ... " << std::endl;
 			int count = 0;
@@ -1256,7 +1257,7 @@ int conn_sub_mqtt()
 				}
 				count ++;
 			}
-		} else 
+		} else
 		{
 			if (led_available)
 			{
@@ -1272,7 +1273,7 @@ int conn_sub_mqtt()
 		gpio_high(LED_RED);
 	}
 	usleep(1000000);
-	
+
 	// mqtt_subscribed
 	int count = 0;
 	while (! mqtt_subscribed)
@@ -1360,7 +1361,7 @@ int main(int argc, char** argv) {
 			comm_protocal = argv[7];
 			std::cout << "Comm protocal:   " << comm_protocal << std::endl;
 		}
-		
+
 		if (strcmp(comm_protocal, "mqtt") == 0)
 		{
 			// for mqtt
@@ -1399,7 +1400,7 @@ int main(int argc, char** argv) {
 			std::cout << "   ADDRESS:      " << lora_ADDRESS << std::endl;
 			std::cout << "   BAND:         " << lora_BAND << std::endl;
 		}
-		
+
 	} else if (argc == 6 && strcmp(argv[1], "view") == 0)
 	{
 		action = argv[1];
@@ -1442,7 +1443,7 @@ int main(int argc, char** argv) {
 		{
 			//std::cout << "Data Storage: " << sd_card << std::endl;
 			result_save_locally = true;
-		} else 
+		} else
 		{
 			std::cout << "No Data Storage found, please insert a Data Storage. " << std::endl;
 			return 2;
@@ -1456,7 +1457,7 @@ int main(int argc, char** argv) {
 		if (file_exists(background_file_path))
 		{
 			read(background_file_path, data_background);
-		} else 
+		} else
 		{
 			std::cout << "No background model found, please train background first: " << std::endl;
 			std::cout << "Usage: peoplecount train <integrationTime0> <integrationTime1> <amplitude> <HDR> <Data Storage>" << std::endl;
@@ -1470,7 +1471,7 @@ int main(int argc, char** argv) {
 		{
 			return -1;
 		}
-	}        
+	}
 
 	usleep(2000000);
 	if (led_available)
@@ -1499,13 +1500,13 @@ int main(int argc, char** argv) {
 				gpio_low(LED_RED);
 			}
 			std::cout << "Opening ToF sensor ..." << std::endl;
-		} else 
+		} else
 		{
 			sensor_uid = camera->getID();
 
 			clientId = "VSEMI_" + std::to_string(sensor_uid);
 		}
-	}        
+	}
 	usleep(2000000);
 	if (led_available)
 	{
@@ -1540,7 +1541,7 @@ int main(int argc, char** argv) {
 		integrationTime0 = 400;
 
 		std::cout << "\nStarting view mode, point browser to http://10.42.0.1:8800 to view ToF distance iamge.\n" << std::endl;
-	} else 
+	} else
 	{
 		if (strcmp(comm_protocal, "lora") == 0)
 		{
