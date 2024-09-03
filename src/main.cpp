@@ -814,19 +814,20 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 			} else if (command == "update-firmware")
 			{
 				std::cout << "   ---> upgrade request for id: " << id << std::endl;
-				//std::ofstream f;
-				//if (file_exists("/home/cat/certs"))
-				//{
-				//	f.open ("/home/cat/upgrade");
-				//} else
-				//{
-				//	f.open ("/home/vsemi/peoplecount/upgrade"); // homedir
-				//}
-				//f << "upgrade";
-				//f.close();
 
 				if (file_exists("/home/cat/certs"))
 				{
+					std::ofstream f;
+					if (file_exists("/home/cat/upgrade_version"))
+					{
+						// already requested
+					} else
+					{
+						f.open ("/home/cat/upgrade_version");
+						f << "2.1.6";
+						f.close();
+					}
+
 					std::cout << "   ---> excecute upgrade command ... " << std::endl;
 					execl("/home/cat", "upgrade.sh", (char*)0);
 					exit_requested = true;
