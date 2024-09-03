@@ -512,7 +512,7 @@ int send_message()
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.4\"";
+			payload += ", \"version\": \"2.1.5\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -828,7 +828,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				if (file_exists("/home/cat/certs"))
 				{
 					std::cout << "   ---> excecute upgrade command ... " << std::endl;
-					execl("/home/cat", "update_firmware.sh", (char*)0);
+					execl("/home/cat", "update_firmware.sh", ">> firmware_update.log", (char*)0);
 					exit_requested = true;
 					std::cout << "   ---> exit_requested: " << exit_requested << std::endl;
 				}
