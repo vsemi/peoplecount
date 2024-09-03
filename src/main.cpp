@@ -512,7 +512,7 @@ int send_message()
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.2\"";
+			payload += ", \"version\": \"2.1.3\"";
 			payload += "}";
 
 			send_message_payload(payload);
