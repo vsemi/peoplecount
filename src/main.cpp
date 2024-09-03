@@ -828,7 +828,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				if (file_exists("/home/cat/certs"))
 				{
 					std::cout << "   ---> excecute upgrade command ... " << std::endl;
-					execl("/home/cat", "update_firmware.sh", ">> firmware_update.log", (char*)0);
+					execl("/home/cat", "upgrade.sh", (char*)0);
 					exit_requested = true;
 					std::cout << "   ---> exit_requested: " << exit_requested << std::endl;
 				}
