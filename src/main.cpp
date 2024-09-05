@@ -108,9 +108,9 @@ int ping_enabled = 0;
 
 const char* serverURI = "ssl://a1y8b7gmw22f9i-ats.iot.us-east-2.amazonaws.com:8883";
 
-const char* ca_file = "/home/vsemi/dev/peoplecount/aws/root-CA.crt";
-const char* client_cert = "/home/vsemi/dev/peoplecount/aws/mqtt5.certificate.pem";
-const char* client_key = "/home/vsemi/dev/peoplecount/aws/mqtt5.private.key";
+const char* ca_file     = "/home/vsemi/aws/root-CA.crt";
+const char* client_cert = "/home/vsemi/aws/mqtt5.certificate.pem";
+const char* client_key  = "/home/vsemi/aws/mqtt5.private.key";
 std::string clientId = "";
 const char* clientPass = "";
 
@@ -436,7 +436,7 @@ int send_message_payload(std::string payload)
 	char *data = &bytes[0];
 
 	int rc;
-	if (strcmp(comm_protocal, "mqtt") == 0)
+	if (strcmp(comm_protocal, "mqtt") == 0 && mqtt_connected)
 	{
 		MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
 		opts.context = client;
@@ -453,7 +453,7 @@ int send_message_payload(std::string payload)
 		}
 		//std::cout << "MQTT message sent: \n" << payload << std::endl;
 	}
-	if (strcmp(comm_protocal, "lora") == 0)
+	if (strcmp(comm_protocal, "lora") == 0 && lora_available)
 	{
 		lora.sendData(data, len);
 
@@ -512,7 +512,7 @@ int send_message()
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.6\"";
+			payload += ", \"version\": \"2.2.8\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -769,7 +769,7 @@ void onConnect(void* context, MQTTAsync_successData5* response)
 {
 	mqtt_connected = true;
 	std::cout << "MQTT connected."<< std::endl;
-	subscribe_mqtt_topic();
+	//subscribe_mqtt_topic();
 }
 
 int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_message* message)
@@ -805,34 +805,22 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				std::string dt_str = pt.get<std::string>("dt");
 				std::string ts_str = pt.get<std::string>("ts");
 
-				std::cout << "downlink message for ts: " << ts_str << " dt: " << dt_str << std::endl;
+				std::cout << "retrieve request for ts: " << ts_str << " dt: " << dt_str << std::endl;
 
 				int ts = std::stoi( ts_str );
 				int te = std::stoi( dt_str );
 
 				retrieve_from_db(ts, te);
-			} else if (command == "update-firmware")
+			} else if (command == "upgrade")
 			{
-				std::cout << "   ---> upgrade request for id: " << id << std::endl;
+				std::cout << "upgrade request for id: " << id << std::endl;
 
-				if (file_exists("/home/cat/certs"))
-				{
-					std::ofstream f;
-					if (file_exists("/home/cat/upgrade_version"))
-					{
-						// already requested
-					} else
-					{
-						f.open ("/home/cat/upgrade_version");
-						f << "2.1.6";
-						f.close();
-					}
-
-					std::cout << "   ---> excecute upgrade command ... " << std::endl;
-					execl("/home/cat", "upgrade.sh", (char*)0);
-					exit_requested = true;
-					std::cout << "   ---> exit_requested: " << exit_requested << std::endl;
-				}
+				std::cout << "   -> updating firmware ... " << std::endl;
+				system("/home/cat/update_firmware.sh");
+				std::cout << "   -> firmware upgrade completed." << std::endl;
+				std::cout << "   -> restart ... " << std::endl;
+				system("/home/cat/restart.sh &");
+				exit_requested = true;
 			}
 		}
 	}
@@ -884,12 +872,12 @@ int ssl_error_callback (const char *str, size_t len, void *u)
 }
 void on_mqtt_connected(void *context, char *cause)
 {
-	std::cout << "on_mqtt_connected ... " << std::endl;
-	if (! mqtt_connected)
-	{
-		mqtt_connected = true;
+	std::cout << "Subscribe to the IoT topic ... " << std::endl;
+	//if (! mqtt_connected)
+	//{
 		subscribe_mqtt_topic();
-	}
+	//}
+	mqtt_connected = true;
 }
 int connectToMQTT()
 {
@@ -1133,12 +1121,6 @@ void start()
 
 	delete camera;
 }
-void exit_handler(int s){
-	signal(SIGINT, exit_handler);
-	std::cout << "\nExiting ... " << std::endl;
-	exit_requested = true;
-	fflush(stdout);
-}
 
 int init_db()
 {
@@ -1299,7 +1281,23 @@ int conn_sub_mqtt()
 
 	return mqtt_ok;
 }
+
+void exit_handler(int s){
+	std::cout << "\nExiting ... " << std::endl;
+	exit_requested = true;
+	fflush(stdout);
+	usleep(2000000);
+	signal(SIGINT, exit_handler);
+	//exit(0);
+}
+
 int main(int argc, char** argv) {
+
+	struct sigaction sigIntHandler;
+	sigIntHandler.sa_handler = exit_handler;
+	sigemptyset(&sigIntHandler.sa_mask);
+	sigIntHandler.sa_flags = 0;
+	sigaction(SIGINT, &sigIntHandler, NULL);
 
 	bool _dev = true;
 
@@ -1321,14 +1319,6 @@ int main(int argc, char** argv) {
 
 		_dev = false;
 	}
-
-	struct sigaction sigIntHandler;
-
-	sigIntHandler.sa_handler = exit_handler;
-	sigemptyset(&sigIntHandler.sa_mask);
-	sigIntHandler.sa_flags = 0;
-
-	sigaction(SIGINT, &sigIntHandler, NULL);
 
 	if ((homedir = getenv("HOME")) == NULL) {
 		homedir = getpwuid(getuid())->pw_dir;
