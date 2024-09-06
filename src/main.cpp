@@ -816,7 +816,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				std::cout << "upgrade request for id: " << id << std::endl;
 
 				std::cout << "   -> updating firmware ... " << std::endl;
-				system("/home/cat/update_firmware.sh &");
+				system("/home/cat/update_firmware.sh >> /home/cat/upgrade.log &");
 				//std::cout << "   -> firmware upgrade completed." << std::endl;
 				//std::cout << "   -> restart ... " << std::endl;
 				//system("/home/cat/restart.sh &");
