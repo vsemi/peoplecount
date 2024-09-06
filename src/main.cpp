@@ -517,7 +517,7 @@ int send_message()
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.11\"";
+			payload += ", \"version\": \"2.1.12\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -816,7 +816,7 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				int te = std::stoi( dt_str );
 
 				retrieve_from_db(ts, te);
-			} else if (command == "upgrade")
+			} else if (command == "firmware_update")
 			{
 				pause_process = true;
 				std::cout << "upgrade request for id: " << id << std::endl;
