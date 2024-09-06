@@ -187,6 +187,7 @@ bool has_ip_address(std::string ip)
 }
 
 int empty_frames_interval = 0;
+bool pause_process = false;
 void process(Camera* camera)
 {
 	ErrorNumber_e status;
@@ -209,7 +210,11 @@ void process(Camera* camera)
 	{
 		try
 		{
-
+			if (pause_process)
+			{
+				usleep(10000);
+				continue;
+			}
 			//en_time = std::chrono::steady_clock::now();
 			//interval = ((double) std::chrono::duration_cast<std::chrono::microseconds>(en_time - st_time).count()) / 1000.0;
 			//if (interval < 100)
@@ -512,7 +517,7 @@ int send_message()
 			time_t t = std::time(nullptr);
 
 			std::string payload = "{\"device_id\":\"" + std::to_string(sensor_uid) + "\", \"msg_type\":\"ping\", \"dt\":\"" + std::to_string(t) + "\"";
-			payload += ", \"version\": \"2.1.9\"";
+			payload += ", \"version\": \"2.1.10\"";
 			payload += "}";
 
 			send_message_payload(payload);
@@ -813,13 +818,14 @@ int messageArrived(void* context, char* topicName, int topicLen, MQTTAsync_messa
 				retrieve_from_db(ts, te);
 			} else if (command == "upgrade")
 			{
+				pause_process = true;
 				std::cout << "upgrade request for id: " << id << std::endl;
 
 				std::cout << "   -> updating firmware ... " << std::endl;
-				system("/home/cat/update_firmware.sh >> /home/cat/upgrade.log &");
-				//std::cout << "   -> firmware upgrade completed." << std::endl;
-				//std::cout << "   -> restart ... " << std::endl;
-				//system("/home/cat/restart.sh &");
+				system("/home/cat/update_firmware.sh");
+				std::cout << "   -> firmware upgrade completed." << std::endl;
+				std::cout << "   -> restart ... " << std::endl;
+				system("/home/cat/restart.sh &");
 				exit_requested = true;
 			}
 		}
